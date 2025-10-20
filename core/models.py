@@ -32,6 +32,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     date_joined = models.DateTimeField(default=timezone.now)
+    referral_code = models.CharField(max_length=32, unique=True, null=True, blank=True)
 
     objects = UserManager()
 
@@ -40,4 +41,4 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return self.phone_number if self.phone_number else self.email
-    
+
