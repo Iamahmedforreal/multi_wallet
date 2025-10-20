@@ -2,16 +2,23 @@ from rest_framework import serializers
 from .models import User
 from django.db import transaction
 from django.contrib.auth import authenticate
+from django.core.validators import EmailValidator 
 
 class registerSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True)
-    confirm_password = serializers.CharField()
-    first_name = serializers.CharField(required=True , max_length=150)
-    last_name = serializers.CharField(required=True , max_length=150)
+    password = serializers.CharField(write_only=True , required=True , min_length=8 , helper_text="Password must be at least 8 characters long")
+    confirm_password = serializers.CharField(write_only=True , required=True)
+    first_name = serializers.CharField(required=True , max_length=150 , min_length=5 , trim_whitespace=True)
+    last_name = serializers.CharField(required=True , max_length=150 , min_length=5 , trim_whitespace=True)
+    email = serializers.EmailField(required=True , Validators=[EmailValidator()])
+
 
     class Meta:
         model = User
-        fields = ['phone_number', 'email', 'password', 'confirm_password', 'first_name', 'last_name']
+        fields = ['first_name', 'last_name', 'email', 'password', 'confirm_passworf', 'phone_number']
+        extra_kwargs = {
+            'phone_number': {'required': True,
+                             'help_text': 'Format: +[country code][number] (E.164)'},
+        }
     
     """ this method is used to validate the password and confirm password """
 
