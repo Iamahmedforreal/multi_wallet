@@ -156,7 +156,7 @@ class loginSerializer(serializers.Serializer):
         - Verify password
         - Track failed attempts
         """
-    phone_number = serializers.CharField(required=True , text_help="Enter your phone number ")
+    phone_number = serializers.CharField(required=True , help_text="Enter your phone number ")
     password = serializers.CharField(write_only=True, required=True)
 
     class Meta:
@@ -219,7 +219,7 @@ class loginSerializer(serializers.Serializer):
             user.last_login = timezone.now()
             user.save()
         data['user'] = user
-        return data
+        return user
 
         
                 

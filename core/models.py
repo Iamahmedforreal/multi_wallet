@@ -31,6 +31,11 @@ class User(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(unique=True, null=True, blank=True)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
+    last_login = models.DateTimeField(null=True, blank=True)
+    account_locked = models.BooleanField(default=False)
+    account_blocked_until = models.DateTimeField(null=True, blank=True)
+
+    
     date_joined = models.DateTimeField(default=timezone.now)
     referral_code = models.CharField(max_length=32, unique=True, null=True, blank=True)
 
