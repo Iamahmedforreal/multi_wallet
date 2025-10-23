@@ -8,6 +8,7 @@ import logging
 logger = logging.getLogger('auth')
 from django.contrib.auth.password_validation import validate_password
 import secrets
+from django.utils import timezone
 
 
 
@@ -148,27 +149,53 @@ class registerSerializer(serializers.ModelSerializer):
 
                 
 class loginSerializer(serializers.Serializer):
-    phone_number = serializers.CharField(required=True)
+    """ Authenticate user with security checks:
+        - Check if user exists
+        - Check if account is locked
+        - Check if account is active
+        - Verify password
+        - Track failed attempts
+        """
+    phone_number = serializers.CharField(required=True , text_help="Enter your phone number ")
     password = serializers.CharField(write_only=True, required=True)
 
     class Meta:
         model = User
         fields = ['phone_number', 'password']
 
+
+
     def validate(self, data):
         phone_number = data.get('phone_number')
         password = data.get('password')
 
-        if phone_number and password:
-            user = authenticate(phone_number=phone_number, password=password)
-            if not user:
-                raise serializers.ValidationError("Invalid credentials username or password")
-            if not user.is_active:
-                raise serializers.ValidationError("User account is disabled")
-            data['user'] = user
-            return data
-        else:
-            raise serializers.ValidationError("Both username and password are required")
+        if not phone_number or not password:
+             raise serializers.ValidationError("Phone number and password are required")
         
+        """ finding user by phone number"""
+        try:
+            user = User.objects.get(phone_number=phone_number , is_deleted=False)
+        except User.DoesNotExist:
+            logger.warning(f"Login attempt with non-existent phone number: {phone_number}")
+            raise serializers.ValidationError("Invalid phone number or password")
+        
+        """ Check if the user account is active """
+        if not user.is_active:
+            logger.warning(f"Login attempt to inactive account: {phone_number}")
+            raise serializers.ValidationError("Account is inactive. Please contact support.")
+        """ check if user locked"""
 
-
+        if user.is_locked_until:
+            if timezone.now() < user.is_locked_until:
+                logger.warning(f"Login attempt to locked account: {phone_number}")
+                raise serializers.ValidationError("Account is locked due to multiple failed login attempts. Please try again later.")
+            else:
+                user.failed_login_attempts = 0
+                user.is_locked_until = None
+                user.save()
+        
+        
+        
+                
+            
+    
