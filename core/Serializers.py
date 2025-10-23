@@ -194,7 +194,33 @@ class loginSerializer(serializers.Serializer):
                 user.is_locked_until = None
                 user.save()
         
+        """ verifying  password """
+        user.check_password(password)
+        if not user.check_password(password):
+            user.failed_login_attempts += 1
+            logger.warning(f"Failed login attempt {user.failed_login_attempts} for phone number: {phone_number}")
+
+            if user.failed_login_attempts >= 5:
+                user.is_locked_until = timezone.now() + timezone.timedelta(minutes=10)
+                logger.error(f"Account locked due to multiple failed attempts: {phone_number}")
+                raise serializers.ValidationError("Account locked due to multiple failed login attempts. Please try again later.")
+            user.save()
+            logger.error(f"Account locked due to multiple failed attempts: {phone_number}")
+            raise serializers.ValidationError("Account locked due to multiple failed login attempts. Please try again later.")
+       
+
+        if not user.active:
+            logger.warning(f"Login attempt to inactive account: {phone_number}")
+            raise serializers.ValidationError("Account is inactive. Please contact support.")
         
+        if user.login_attempts > 0:
+            user.login_attempts = 0
+            user.account_locked_until = None
+            user.last_login = timezone.now()
+            user.save()
+        data['user'] = user
+        return data
+
         
                 
             
