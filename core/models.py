@@ -33,7 +33,9 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_staff = models.BooleanField(default=False)
     last_login = models.DateTimeField(null=True, blank=True)
     account_locked = models.BooleanField(default=False)
-    account_blocked_until = models.DateTimeField(null=True, blank=True)
+    account_locked_until = models.DateTimeField(null=True, blank=True)
+    fail_login_attempts = models.IntegerField(default=0)
+    login_attempts = models.IntegerField(default=0)
 
     
     date_joined = models.DateTimeField(default=timezone.now)
