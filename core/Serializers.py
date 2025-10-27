@@ -185,21 +185,22 @@ class loginSerializer(serializers.Serializer):
             raise serializers.ValidationError("Account is inactive. Please contact support.")
         """ check if user locked"""
 
-        if user.is_locked_until:
-            if timezone.now() < user.is_locked_until:
+        if user.account_locked_until:
+            if timezone.now() < user.account_locked_until:
                 logger.warning(f"Login attempt to locked account: {phone_number}")
                 raise serializers.ValidationError("Account is locked due to multiple failed login attempts. Please try again later.")
             else:
-                user.failed_login_attempts = 0
-                user.is_locked_until = None
+                user.fail_login_attempts = 0
+                user.account_locked_until = None
                 user.save()
         
         """ verifying  password """
         user.check_password(password)
         if not user.check_password(password):
-            user.failed_login_attempts += 1
-            logger.warning(f"Failed login attempt {user.failed_login_attempts} for phone number: {phone_number}")
-
+            user.fail_login_attempts += 1
+            logger.warning(f"Failed login attempt {user.fail_login_attempts} for phone number: {phone_number}")
+  
+            """ Lock account after 5 failed attempts for 10 minutes """
             if user.failed_login_attempts >= 5:
                 user.is_locked_until = timezone.now() + timezone.timedelta(minutes=10)
                 logger.error(f"Account locked due to multiple failed attempts: {phone_number}")
@@ -208,11 +209,12 @@ class loginSerializer(serializers.Serializer):
             logger.error(f"Account locked due to multiple failed attempts: {phone_number}")
             raise serializers.ValidationError("Account locked due to multiple failed login attempts. Please try again later.")
        
-
-        if not user.active:
+        """ Check if the user account is active """
+        if not user.is_active:
             logger.warning(f"Login attempt to inactive account: {phone_number}")
             raise serializers.ValidationError("Account is inactive. Please contact support.")
         
+        """ Reset failed attempts on successful login """
         if user.login_attempts > 0:
             user.login_attempts = 0
             user.account_locked_until = None
@@ -220,6 +222,52 @@ class loginSerializer(serializers.Serializer):
             user.save()
         data['user'] = user
         return user
+    
+class userSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'phone_number', 'email', 'first_name', 'last_name', 'date_joined', 'referral_code']
+        read_only_fields = ['id', 'date_joined', 'referral_code']
+
+class changePasswordSerializer(serializers.Serializer):
+    old_password = serializers.CharField(write_only=True, required=True)
+    new_password = serializers.CharField(write_only=True, required=True , min_length=8)
+    confirm_new_password = serializers.CharField(write_only=True, required=True)
+    class Meta:
+        fields = ['old_password', 'new_password', 'confirm_new_password']
+
+    def validate_new_password(self, data):
+        try:
+            validate_password(data)
+        except Exception as e:
+            raise serializers.ValidationError(str(e))
+        
+        if re.search(r'[A-Z]', data) is None:
+            raise serializers.ValidationError("Password must contain at least one uppercase letter")
+        if re.search(r'[a-z]', data) is None:
+            raise serializers.ValidationError("Password must contain at least one lowercase letter")
+        if re.search(r'[!@#$%^&*(),.?":{}|<>]', data) is None:
+            raise serializers.ValidationError("Password must contain at least one special character")
+    
+        return data
+    
+    """ this method is for checking old password"""
+    def validate_old_password(self, data):
+        user = self.context['request'].user
+        if not user.check_password(data):
+            raise serializers.ValidationError("Old password is incorrect")
+        return data
+    
+    """ this method is for checking new password and confirm new password"""
+    def validate(self, data):
+        password = data.get('new_password')
+        confirm_password = data.get('confirm_new_password')
+
+        if password != confirm_password:
+            raise serializers.ValidationError("New Password and Confirm New Password do not match")
+        return data
+       
+
 
         
                 
