@@ -8,7 +8,9 @@ import logging
 logger = logging.getLogger('auth')
 from django.contrib.auth.password_validation import validate_password
 import secrets
+from .models import User 
 from django.utils import timezone
+from datetime import timedelta
 
 
 
@@ -23,9 +25,9 @@ class registerSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['first_name', 'last_name', 'email', 'password', 'confirm_passworf', 'phone_number']
+        fields = ['first_name', 'last_name', 'username' , 'email', 'password', 'confirm_password', 'phone_number']
         extra_kwargs = {
-            'phone_number': {'required': True,
+            'phone_number': {
                              'help_text': 'Format: +[country code][number] (E.164)'},
         }
     
@@ -119,6 +121,7 @@ class registerSerializer(serializers.ModelSerializer):
         try:
           with transaction.atomic():
             user = User.objects.create_user(
+                    username=validated_data['username'],
                     phone_number=validated_data['phone_number'],
                     email=validated_data['email'].lower(),
                     password=validated_data['password'],
@@ -143,85 +146,69 @@ class registerSerializer(serializers.ModelSerializer):
         except Exception as e:
             logger.error(f'Registration error: {str(e)}')
             raise serializers.ValidationError(
-                "Registration failed. Please try again."
+               str(e)
             )
-        
+        from datetime import timedelta
 
-                
+
+
+
 class loginSerializer(serializers.Serializer):
-    """ Authenticate user with security checks:
-        - Check if user exists
-        - Check if account is locked
-        - Check if account is active
-        - Verify password
-        - Track failed attempts
-        """
-    username = serializers.CharField(required=True , help_text="Enter your phone number ")
+    """Authenticate user with security checks"""
+    username = serializers.CharField(required=True, help_text="Enter your phone number")
     password = serializers.CharField(write_only=True, required=True)
-
-    class Meta:
-        model = User
-        fields = ['username', 'password']
-
-
 
     def validate(self, data):
         username = data.get('username')
         password = data.get('password')
 
         if not username or not password:
-             raise serializers.ValidationError("username and password are required")
-        
-        """ finding user by phone number"""
+            raise serializers.ValidationError("Username and password are required.")
+
+        # Find user
         try:
-            user = User.objects.get(username=username , is_deleted=False)
+            user = User.objects.get(username=username, is_deleted=False)
         except User.DoesNotExist:
-            logger.error(f"Login attempt with non-existent usernmae: {username}")
-            raise serializers.ValidationError("Invalid  username or password")
-        
-        """ Check if the user account is active """
+            logger.warning(f"Login attempt with non-existent username: {username}")
+            raise serializers.ValidationError("Invalid username or password.")
+
+        # Check if active
         if not user.is_active:
             logger.warning(f"Login attempt to inactive account: {username}")
             raise serializers.ValidationError("Account is inactive. Please contact support.")
-        """ check if user locked"""
 
-        if user.account_locked_until:
-            if timezone.now() < user.account_locked_until:
-                logger.warning(f"Login attempt to locked account: {username}")
-                raise serializers.ValidationError("Account is locked due to multiple failed login attempts. Please try again later.")
-            else:
-                user.fail_login_attempts = 0
-                user.account_locked_until = None
-                user.save()
-        
-        """ verifying  password """
-        user.check_password(password)
+        # Check if locked
+        if user.account_locked_until and timezone.now() < user.account_locked_until:
+            logger.warning(f"Login attempt to locked account: {username}")
+            raise serializers.ValidationError("Account is locked. Try again later.")
+        elif user.account_locked_until and timezone.now() >= user.account_locked_until:
+            # Unlock if lock time expired
+            user.fail_login_attempts = 0
+            user.account_locked_until = None
+            user.save()
+
+        # Verify password
         if not user.check_password(password):
             user.fail_login_attempts += 1
-            logger.warning(f"Failed login attempt {user.fail_login_attempts} for username : {username}")
-  
-            """ Lock account after 5 failed attempts for 10 minutes """
-            if user.failed_login_attempts >= 5:
-                user.is_locked_until = timezone.now() + timezone.timedelta(minutes=10)
-                logger.error(f"Account locked due to multiple failed attempts: {username}")
-                raise serializers.ValidationError("Account locked due to multiple failed login attempts. Please try again later.")
+            if user.fail_login_attempts >= 5:
+                user.account_locked_until = timezone.now() + timedelta(minutes=10)
+                user.save()
+                logger.error(f"Account locked due to failed attempts: {username}")
+                raise serializers.ValidationError("Account locked due to multiple failed attempts. Try again later.")
             user.save()
-            logger.error(f"Account locked due to multiple failed attempts: {username}")
-            raise serializers.ValidationError("Account locked due to multiple failed login attempts. Please try again later.")
-       
-        """ Check if the user account is active """
-        if not user.is_active:
-            logger.warning(f"Login attempt to inactive account: {username}")
-            raise serializers.ValidationError("Account is inactive. Please contact support.")
-        
-        """ Reset failed attempts on successful login """
-        if user.login_attempts > 0:
-            user.login_attempts = 0
+            logger.warning(f"Failed login attempt {user.fail_login_attempts} for username: {username}")
+            raise serializers.ValidationError("Invalid username or password.")
+
+        # Reset failed attempts on success
+        if user.fail_login_attempts > 0:
+            user.fail_login_attempts = 0
             user.account_locked_until = None
-            user.last_login = timezone.now()
-            user.save()
+        user.last_login = timezone.now()
+        user.save()
+
         data['user'] = user
-        return user
+        return data
+
     
 class userSerializer(serializers.ModelSerializer):
     class Meta:

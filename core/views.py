@@ -1,18 +1,19 @@
 from django.shortcuts import render
 from .models import User
-from .Serializers import registerSerializer, loginSerializer , userSerializer , changePasswordSerializer
+from .Serializers import registerSerializer, loginSerializer, userSerializer , changePasswordSerializer
 from rest_framework.views import APIView 
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
 from rest_framework import permissions
 from .models import AuditLog
+
 import logging
 
 class registerView(APIView):
     permission_classes = [permissions.AllowAny]
     def post(self, request):
         serializer = registerSerializer(data=request.data)
-        if  serializer.is_valid():
+        if  serializer.is_valid(raise_exception=True):
             user = serializer.save()
 
             AuditLog.objects.create(
