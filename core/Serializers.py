@@ -156,38 +156,38 @@ class loginSerializer(serializers.Serializer):
         - Verify password
         - Track failed attempts
         """
-    phone_number = serializers.CharField(required=True , help_text="Enter your phone number ")
+    username = serializers.CharField(required=True , help_text="Enter your phone number ")
     password = serializers.CharField(write_only=True, required=True)
 
     class Meta:
         model = User
-        fields = ['phone_number', 'password']
+        fields = ['username', 'password']
 
 
 
     def validate(self, data):
-        phone_number = data.get('phone_number')
+        username = data.get('username')
         password = data.get('password')
 
-        if not phone_number or not password:
-             raise serializers.ValidationError("Phone number and password are required")
+        if not username or not password:
+             raise serializers.ValidationError("username and password are required")
         
         """ finding user by phone number"""
         try:
-            user = User.objects.get(phone_number=phone_number , is_deleted=False)
+            user = User.objects.get(username=username , is_deleted=False)
         except User.DoesNotExist:
-            logger.warning(f"Login attempt with non-existent phone number: {phone_number}")
-            raise serializers.ValidationError("Invalid phone number or password")
+            logger.error(f"Login attempt with non-existent usernmae: {username}")
+            raise serializers.ValidationError("Invalid  username or password")
         
         """ Check if the user account is active """
         if not user.is_active:
-            logger.warning(f"Login attempt to inactive account: {phone_number}")
+            logger.warning(f"Login attempt to inactive account: {username}")
             raise serializers.ValidationError("Account is inactive. Please contact support.")
         """ check if user locked"""
 
         if user.account_locked_until:
             if timezone.now() < user.account_locked_until:
-                logger.warning(f"Login attempt to locked account: {phone_number}")
+                logger.warning(f"Login attempt to locked account: {username}")
                 raise serializers.ValidationError("Account is locked due to multiple failed login attempts. Please try again later.")
             else:
                 user.fail_login_attempts = 0
@@ -198,20 +198,20 @@ class loginSerializer(serializers.Serializer):
         user.check_password(password)
         if not user.check_password(password):
             user.fail_login_attempts += 1
-            logger.warning(f"Failed login attempt {user.fail_login_attempts} for phone number: {phone_number}")
+            logger.warning(f"Failed login attempt {user.fail_login_attempts} for username : {username}")
   
             """ Lock account after 5 failed attempts for 10 minutes """
             if user.failed_login_attempts >= 5:
                 user.is_locked_until = timezone.now() + timezone.timedelta(minutes=10)
-                logger.error(f"Account locked due to multiple failed attempts: {phone_number}")
+                logger.error(f"Account locked due to multiple failed attempts: {username}")
                 raise serializers.ValidationError("Account locked due to multiple failed login attempts. Please try again later.")
             user.save()
-            logger.error(f"Account locked due to multiple failed attempts: {phone_number}")
+            logger.error(f"Account locked due to multiple failed attempts: {username}")
             raise serializers.ValidationError("Account locked due to multiple failed login attempts. Please try again later.")
        
         """ Check if the user account is active """
         if not user.is_active:
-            logger.warning(f"Login attempt to inactive account: {phone_number}")
+            logger.warning(f"Login attempt to inactive account: {username}")
             raise serializers.ValidationError("Account is inactive. Please contact support.")
         
         """ Reset failed attempts on successful login """
@@ -260,12 +260,9 @@ class changePasswordSerializer(serializers.Serializer):
     
     """ this method is for checking new password and confirm new password"""
     def validate(self, data):
-        password = data.get('new_password')
-        confirm_password = data.get('confirm_new_password')
-
-        if password != confirm_password:
-            raise serializers.ValidationError("New Password and Confirm New Password do not match")
-        return data
+       if data['new_password'] != data['confirm_new_password']:
+              raise serializers.ValidationError("New password and Confirm new password do not match")
+       return data
        
 
 
