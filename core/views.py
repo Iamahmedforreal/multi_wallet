@@ -11,6 +11,7 @@ from django.utils import timezone
 import logging
 logger = logging.getLogger('auth')
 from django.db import transaction
+from .throttles import loginThrottle
 
 
 
@@ -48,6 +49,7 @@ class registerView(APIView):
 
 class loginView(APIView):
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [loginThrottle]
     def post(self, request):
         serializer = loginSerializer(data=request.data)
         if not serializer.is_valid():
@@ -128,7 +130,7 @@ class changePasswordView(APIView):
         
         user = request.user
         new_password = serializer.validated_data['new_password']
-        
+
         """ Change the user's password and log the action """
         try:
             with transaction.atomic():
