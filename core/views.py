@@ -12,6 +12,8 @@ import logging
 logger = logging.getLogger('auth')
 from django.db import transaction
 from .throttles import loginThrottle
+from .utils import verify_verification_token
+from django.core import signing
 
 
 
@@ -50,6 +52,7 @@ class registerView(APIView):
 class loginView(APIView):
     permission_classes = [permissions.AllowAny]
     throttle_classes = [loginThrottle]
+    
     def post(self, request):
         serializer = loginSerializer(data=request.data)
         if not serializer.is_valid():
@@ -146,5 +149,49 @@ class changePasswordView(APIView):
             logger.exception("Failed to write AuditLog for password change")
             return Response({"error": str(e)}, status=400)
         return Response({"message":"Password changed successfully"}, status=200)
+
+
+class VerifyEmailView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        token = request.query_params.get('token')
+        if not token:
+            return Response({"error": "Missing token"}, status=400)
+
+        try:
+            payload = verify_verification_token(token)
+        except signing.SignatureExpired:
+            return Response({"error": "Token expired"}, status=400)
+        except signing.BadSignature:
+            return Response({"error": "Invalid token"}, status=400)
+        except Exception as e:
+            return Response({"error": str(e)}, status=400)
+
+        user_id = payload.get('user_id')
+        try:
+            user = User.objects.get(id=user_id, is_deleted=False)
+        except User.DoesNotExist:
+            return Response({"error": "User not found"}, status=404)
+
+        if user.is_verified:
+            return Response({"message": "Account already verified"}, status=200)
+
+        user.is_active = True
+        user.is_verified = True
+        user.save()
+
+        # Log verification
+        try:
+            AuditLog.objects.create(
+                user=user,
+                action='Email Verified',
+                ip_address=request.META.get('REMOTE_ADDR'),
+                user_agent=request.META.get('HTTP_USER_AGENT', ''),
+            )
+        except Exception:
+            pass
+
+        return Response({"message": "Email verified successfully"}, status=200)
 
        

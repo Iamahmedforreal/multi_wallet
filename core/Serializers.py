@@ -11,6 +11,7 @@ import secrets
 from .models import User 
 from django.utils import timezone
 from datetime import timedelta
+from .utils import send_verification_to_user
 
 
 
@@ -127,13 +128,21 @@ class registerSerializer(serializers.ModelSerializer):
                     password=validated_data['password'],
                     first_name=validated_data['first_name'].strip(),
                     last_name=validated_data['last_name'].strip(),
-                    is_active=True,
+                    # Create inactive user until they verify their email
+                    is_active=False,
                     is_deleted=False,
                 )
             
             """ Generate a unique referral code for the user """
             user.referral_code = secrets.token_urlsafe(8)
             user.save()
+
+            # Send verification email asynchronously
+            try:
+                send_verification_to_user(user)
+            except Exception:
+                # If sending fails, continue registration but user remains inactive
+                logger.exception('Failed to enqueue verification email for user %s', user.id)
 
 
             """ Log user creation """
