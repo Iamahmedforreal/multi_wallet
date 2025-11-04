@@ -34,21 +34,19 @@ class UserManager(BaseUserManager):
     
 class User(AbstractBaseUser, PermissionsMixin):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    phone_number = models.CharField(max_length=15, unique=True, null=True, blank=True)
-    
-    
+    phone_number = models.CharField(max_length=15, unique=True, null=True, blank=True)  
     email = models.EmailField(unique=True, null=True, blank=True)
     first_name = models.CharField(max_length=30, null=True, blank=True)
     last_name = models.CharField(max_length=30, null=True, blank=True)
     username = models.CharField(max_length=150, unique=True, null=True, blank=True)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
+    is_verified = models.BooleanField(default=False)
     last_login = models.DateTimeField(null=True, blank=True)
     account_locked = models.BooleanField(default=False)
     account_locked_until = models.DateTimeField(null=True, blank=True)
     fail_login_attempts = models.IntegerField(default=0)
     is_deleted = models.BooleanField(default=False)
-    
     date_joined = models.DateTimeField(default=timezone.now)
     referral_code = models.CharField(max_length=32, unique=True, null=True, blank=True)
 
