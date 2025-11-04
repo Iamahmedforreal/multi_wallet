@@ -1,4 +1,4 @@
-from .celerly import app as celery_app
-from dotenv import load_dotenv
+from .celery import app as celery_app
+
 
 __all__ = ('celery_app',)
